@@ -10,8 +10,8 @@ import argparse
 import pprint
 import pdb
 import time
-import cv2
 import torch
+import cv2
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.optim as optim
@@ -19,7 +19,10 @@ import torch.optim as optim
 import PIL.Image as Image
 import PIL.ImageDraw as ImageDraw
 import PIL.ImageFont as ImageFont
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 
 import torchvision.transforms as transforms
 import torchvision.datasets as dset
@@ -70,7 +73,7 @@ def parse_args():
                       nargs=argparse.REMAINDER)
   parser.add_argument('--load_dir', dest='load_dir',
                       help='directory to load models',
-                      default="output/models")
+                      default="/root/NicoPytorch2.7/pytorch-detect-to-track/data/pretrained_model")
   parser.add_argument('--image_dir', dest='image_dir',
                       help='directory to load images for demo',
                       default="images")
@@ -91,10 +94,10 @@ def parse_args():
                       default=1, type=int)
   parser.add_argument('--checkepoch', dest='checkepoch',
                       help='checkepoch to load network',
-                      default=1, type=int)
+                      default=7, type=int)
   parser.add_argument('--checkpoint', dest='checkpoint',
                       help='checkpoint to load network',
-                      default=10021, type=int)
+                      default=32941, type=int)
   parser.add_argument('--bs', dest='batch_size',
                       help='batch_size',
                       default=1, type=int)
@@ -111,69 +114,15 @@ lr = cfg.TRAIN.LEARNING_RATE
 momentum = cfg.TRAIN.MOMENTUM
 weight_decay = cfg.TRAIN.WEIGHT_DECAY
 
-def visualize_without_paths(video_dataset, pred_boxes, scores, pred_trk_boxes, det_classes):
-    print("Visualizing...")
-    list_im = video_dataset._frame_paths 
-
-    num_classes = len(det_classes)
-    num_frames = len(list_im)
-    try:
-        font = ImageFont.truetype('arial.ttf', 24)
-    except IOError:
-        font = ImageFont.load_default()
-
-    for i_frame in range(num_frames-1):
-        print('frame: {}/{}'.format(i_frame, num_frames))
-        fig, ax = plt.subplots(figsize=(12, 12))
-        img_path = list_im[i_frame]
-        img = cv2.imread(img_path)
-        img = img[:,:,(2,1,0)]
-        disp_image = Image.fromarray(np.uint8(img))
-        for cls_ind in range(1, num_classes):
-            ax.imshow(disp_image, aspect='equal')
-            class_name = det_classes[cls_ind]
-            keep = torch.nonzero(scores[i_frame][0][:, cls_ind]>CONF_THRESH).view(-1)
-            if keep.numel()==0:
-                # no detections above threshold for this class
-                continue
-            cls_scores = scores[i_frame][0][keep][:, cls_ind]
-            _, order = torch.sort(cls_scores, 0, True)
-            cls_boxes = pred_boxes[i_frame][0][keep, :]
-            cls_dets = torch.cat([cls_boxes, cls_scores.contiguous().view(-1,1)], dim=1)
-            cls_dets = cls_dets[order]
-            keep = nms(cls_dets, 0.3)
-            cls_dets = cls_dets[keep.view(-1).long()]
-            for ibox in range(cls_dets.size(0)):
-                bbox = cls_dets[ibox, :4].cpu().numpy().flatten()
-                score = cls_dets[ibox, 4]
-                ax.add_patch(
-                        plt.Rectangle((bbox[0], bbox[1]),
-                            bbox[2] - bbox[0],
-                            bbox[3] - bbox[1], fill=False,
-                            edgecolor=COLOR_WHEEL[cls_ind], linewidth=3.5)
-                        )
-                ax.text(bbox[0], bbox[1] - 2,
-                        '{:s} {:.3f}'.format(class_name, score),
-                        bbox=dict(facecolor=COLOR_WHEEL[cls_ind], alpha=0.5),
-                        fontsize=14, color='white')
-
-        # Save image with bboxes overlaid
-        plt.axis('off')
-        plt.tight_layout()
-        #plt.show()
-        if not os.path.exists(video_dataset._output_dir):
-            os.makedirs(video_dataset._output_dir)
-        plt.savefig(os.path.join(video_dataset._output_dir, os.path.basename(img_path)))
-        plt.clf()
-        plt.close('all')
-
 
 def visualize_with_paths(video_dataset, video_post_proc):
 
     print("Visualizing...")
     list_im = video_dataset._frame_paths 
     # define save dir
-    save_dir = video_dataset._output_dir
+    #save_dir = video_dataset._output_dir
+    video_name=os.path.basename(os.path.normpath(video_dataset._output_dir))
+    save_dir = args.image_dir + '/' + video_name
     output_dir = save_dir.replace('.mp4', '')
     if not os.path.exists(output_dir): 
         os.makedirs(output_dir)
@@ -185,23 +134,7 @@ def visualize_with_paths(video_dataset, video_post_proc):
         font = ImageFont.truetype('arial.ttf', 24)
     except IOError:
         font = ImageFont.load_default()
-    #filtered_paths = {cls_name:[] for cls_name in det_classes}
-    #for cls_ind in range(1, num_classes):
-    #    class_name = det_classes[cls_ind]
-    #    smooth_scores = paths[cls_ind]['smooth_scores']
-    #    boxes = paths[cls_ind]['boxes']
-    #    num_paths = smooth_scores.size(0) # number of paths for this class
-    #	for ipath in range(num_paths):
-    #        boxes_with_smooth_scores = torch.cat([boxes[ipath],smooth_scores[ipath]], dim=1)
-    #        keep = torch.nonzero(boxes_with_smooth_scores[:, -1]>CONF_THRESH).view(-1)
-    #        if keep.numel()==0:
-                # no detections above threshold for this class
-    #            continue
-    #        boxes_to_keep = boxes_with_smooth_scores[keep]
-            # [x0,y0,x1,y1,score,smooth_score,frame_index]
-    #        boxes_to_keep = torch.cat([boxes_to_keep, keep.view(-1,1).float()], dim=1)
-    #        filtered_paths[class_name].append(boxes_to_keep)
-
+  
     for i_frame in range(num_frames):
         print('frame: {}/{}'.format(i_frame, num_frames))
         fig, ax = plt.subplots(figsize=(12, 12))
@@ -327,7 +260,7 @@ if __name__ == '__main__':
   # train set
   # -- Note: Use validation set and disable the flipped to enable faster loading.
 
-  input_dir = args.load_dir + "/" + args.net + "/" + args.dataset
+  input_dir = args.load_dir + "/" + args.net 
   if not os.path.exists(input_dir):
     raise Exception('There is no input directory for loading network from ' + input_dir)
   load_name = os.path.join(input_dir,
@@ -362,7 +295,7 @@ if __name__ == '__main__':
   print('load model successfully!')
 
   # pdb.set_trace()
-
+  
   print("load checkpoint %s" % (load_name))
 
   # initilize the tensor holder here.
@@ -407,6 +340,7 @@ if __name__ == '__main__':
       vid_pred_trk_boxes = [] # container for predicted tracking boxes over all frames
       vid_scores = [] # container for box scores across all frames
       vid_blob = video_dataset[ivid]
+      print(vid_id)
       assert os.path.exists(video_dataset.video_name), \
               "File {} does not exist. Confirm input is full path.".format(vid)
       # Iterate over all frame pairs in the ividth video
@@ -488,8 +422,3 @@ if __name__ == '__main__':
                                              vid_pred_trk_boxes, imagenet_vid_classes, vid_id)
 	  paths = vid_post_proc.class_paths(path_score_thresh=0.5)
 	  visualize_with_paths(video_dataset, vid_post_proc)
-	  #visualize_without_paths(video_dataset, vid_pred_boxes, vid_scores, vid_pred_trk_boxes, imagenet_vid_classes)
-
-
-
-
