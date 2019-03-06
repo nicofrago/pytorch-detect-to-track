@@ -165,13 +165,7 @@ def visualize_with_paths(video_dataset, video_post_proc):
                         bbox=dict(facecolor=COLOR_WHEEL[cls_ind], alpha=0.5),
                         fontsize=14, color='white')
                 
-            #class_paths = filtered_paths[class_name]
-            #for path in class_paths:
-            #    box_id = torch.nonzero(path[:,-1]==i_frame).long().view(-1)
-            #    if box_id.numel()==0:
-            #        continue
-            #    bbox = path[box_id][:, :4].cpu().numpy().flatten()
-            #    score = path[box_id][:, 5].cpu().numpy()
+        
         # Save image with bboxes overlaid
         plt.axis('off')
         plt.tight_layout()
